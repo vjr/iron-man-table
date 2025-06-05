@@ -3,7 +3,6 @@ import { Hands, Results, NormalizedLandmark } from '@mediapipe/hands';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { HAND_CONNECTIONS } from '@mediapipe/hands';
 import { useSkySQLTables } from '../hooks/useSkySQLTables';
-import { skysql } from '../lib/skysql';
 
 interface HandTrackingProps {
   cameraId: string;
@@ -156,9 +155,6 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
     if (!relationship) return null;
     
     try {
-      const { skysql } = await import('../lib/skysql');
-      let conn = await skysql.getConnection();
-
       // Determine query strategy based on table names and relationship
       const referencingTable = relationship.referencingTable;
       const referencedTable = relationship.referencedTable;
@@ -166,11 +162,12 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
       
       // Strategy 1: Users + Posts/Comments/Orders (show user activity)
       if (referencedTable.toLowerCase().includes('user') || referencedTable.toLowerCase().includes('customer')) {
-
-        // Use skysql connection to fetch referencedTable with count of referencingTable
-        const { rows: data, error } = await conn.query(
-          `
-          SELECT
+        const response = await fetch('http://localhost:3001/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sql: `
+            SELECT
             ${referencedTable}.id,
             ${referencedTable}.name,
             ${referencedTable}.email,
@@ -180,20 +177,20 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             ${referencedTable}.created_at,
             ${referencedTable}.date,
             COUNT(${referencingTable}.${foreignKey}) AS item_count
-          FROM ${referencedTable}
-          LEFT JOIN ${referencingTable}
+            FROM ${referencedTable}
+            LEFT JOIN ${referencingTable}
             ON ${referencingTable}.${foreignKey} = ${referencedTable}.id
-          GROUP BY ${referencedTable}.id
-          `
-        );
-
-        if (!error && data) {
+            GROUP BY ${referencedTable}.id
+            ` })
+        });
+        const { result } = await response.json();
+        const data = result;
+        if (data) {
           const processedData = data.map(user => ({
             ...user,
-            activity_count: user[referencingTable]?.length || 0,
+            activity_count: user.item_count || 0,
             _table: referencedTable
           }));
-          
           return {
             type: 'user_activity',
             title: `${referencedTable.toUpperCase()} ACTIVITY`,
@@ -205,15 +202,16 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           };
         }
       }
-      
       // Strategy 2: Categories + Products (show category popularity)
       if (referencedTable.toLowerCase().includes('categor') || 
           referencingTable.toLowerCase().includes('product') ||
           referencingTable.toLowerCase().includes('item')) {
-
-        const { rows: data, error } = await conn.query(
-          `
-          SELECT
+        const response = await fetch('http://localhost:3001/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sql: `
+            SELECT
             ${referencedTable}.id,
             ${referencedTable}.name,
             ${referencedTable}.title,
@@ -222,20 +220,20 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             ${referencedTable}.created_at,
             ${referencedTable}.date,
             COUNT(${referencingTable}.${foreignKey}) AS item_count
-          FROM ${referencedTable}
-          LEFT JOIN ${referencingTable}
+            FROM ${referencedTable}
+            LEFT JOIN ${referencingTable}
             ON ${referencingTable}.${foreignKey} = ${referencedTable}.id
-          GROUP BY ${referencedTable}.id
-          `
-        );
-
-        if (!error && data) {
+            GROUP BY ${referencedTable}.id
+            ` })
+        });
+        const { result } = await response.json();
+        const data = result;
+        if (data) {
           const processedData = data.map(category => ({
             ...category,
-            item_count: category[referencingTable]?.length || 0,
+            item_count: category.item_count || 0,
             _table: referencedTable
           }));
-          
           return {
             type: 'category_distribution',
             title: 'CATEGORY DISTRIBUTION',
@@ -247,12 +245,13 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           };
         }
       }
-      
       // Strategy 3: Generic aggregation (count references)
-      // Use skysql connection to fetch referencingTable with referencedTable joined
-      const { rows: data, error } = await conn.query(
-        `
-        SELECT
+      const response = await fetch('http://localhost:3001/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sql: `
+          SELECT
           ${referencingTable}.${foreignKey},
           ${referencedTable}.name,
           ${referencedTable}.title,
@@ -261,38 +260,31 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           ${referencedTable}.createdAt,
           ${referencedTable}.created_at,
           ${referencedTable}.date
-        FROM ${referencingTable}
-        LEFT JOIN ${referencedTable}
+          FROM ${referencingTable}
+          LEFT JOIN ${referencedTable}
           ON ${referencingTable}.${foreignKey} = ${referencedTable}.id
-        `
-      );
-
-      if (!error && data) {
+          ` })
+      });
+      const { result } = await response.json();
+      const data = result;
+      if (data) {
         // Group and count by referenced item
         const counts = new Map();
         data.forEach(item => {
-          const referencedItem = item[referencedTable];
-          if (referencedItem) {
-            const key = referencedItem.id;
-            const displayName = referencedItem.title || referencedItem.name || `${referencedTable} ${referencedItem.id}`;
-            
-            if (!counts.has(key)) {
-              counts.set(key, { 
-                ...referencedItem,
-                name: displayName, 
-                count: 0, 
-                id: referencedItem.id,
-                _table: referencedTable 
-              });
-            }
-            counts.get(key).count++;
+          const key = item.id;
+          const displayName = item.title || item.name || `${referencedTable} ${item.id}`;
+          if (!counts.has(key)) {
+            counts.set(key, { 
+              ...item,
+              name: displayName, 
+              count: 0, 
+              id: item.id,
+              _table: referencedTable 
+            });
           }
+          counts.get(key).count++;
         });
-
-        if (conn) await conn.end();
-
         const processedData = Array.from(counts.values());
-        
         return {
           type: 'relationship_count',
           title: 'RELATIONSHIP ANALYSIS',
@@ -387,42 +379,34 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
         return;
       }
     }
-    
     setLoadingData(true);
     try {
-      const { skysql } = await import('../lib/skysql');
-      let conn = await skysql.getConnection();
-
       const allData: any[] = [];
-      
       for (const tableName of tableNames) {
         try {
-          const { rows: data, error } = await conn.query(`SELECT * FROM ${tableName}`);
-          
-          if (error) {
-            console.error(`Error fetching ${tableName}:`, error);
-            continue;
-          }
-          
+          const response = await fetch('http://localhost:3001/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sql: `SELECT * FROM ${tableName}` })
+          });
+          const { result } = await response.json();
+          const data = result;
           if (data && data.length > 0) {
-            // Add table source to each record
             data.forEach(record => {
-              allData.push({ ...record, _table: tableName });
+              record._table = tableName;
+              allData.push(record);
             });
           }
         } catch (err) {
           console.error(`Failed to fetch ${tableName}:`, err);
         }
       }
-
-      if (conn) await conn.end();
-
       setChartData({ tables: tableNames, data: allData });
       setLoadingData(false);
     } catch (err) {
-      console.error('Error loading SkySQL client:', err);
+      console.error('Error loading SkySQL REST API:', err);
       setLoadingData(false);
-      // Use demo data if SkySQL client fails with relationships
+      // Use demo data if SkySQL REST API fails with relationships
       console.info('Using demo data due to error');
       const demoData = tableNames.flatMap((table, tableIndex) => 
         Array.from({ length: 5 }, (_, i) => {
@@ -433,13 +417,11 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             title: `${table} Title ${i + 1}`,
             _table: table
           };
-          
           // Add foreign key relationships for demo
           if (tableNames.length === 2 && tableIndex === 1) {
             // Second table references first table
             baseRecord[`${tableNames[0]}_id`] = Math.floor(Math.random() * 5) + 1;
           }
-          
           return baseRecord;
         })
       );
@@ -1171,7 +1153,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             count: data.count,
             table: data.table
           }))
-; // No limit - show all data
+          ; // No limit - show all data
       }
       
       const maxItems = Math.min(groupedData.length, 30); // Show more items in regular charts
@@ -1557,69 +1539,69 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             // Hexagonal border
             const hexSize = size/2;
             canvasCtx.strokeStyle = table.isDragging ? '#FF8800' : '#00FFFF';
-            canvasCtx.lineWidth = 2;
-            canvasCtx.shadowBlur = 10;
-            canvasCtx.shadowColor = table.isDragging ? '#FF8800' : '#00FFFF';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = table.isDragging ? '#FF8800' : '#00FFFF';
             
-            canvasCtx.beginPath();
+            ctx.beginPath();
             for (let i = 0; i < 6; i++) {
               const angle = (Math.PI / 3) * i;
               const x = tableX + hexSize * Math.cos(angle);
               const y = tableY + hexSize * Math.sin(angle);
-              if (i === 0) canvasCtx.moveTo(x, y);
-              else canvasCtx.lineTo(x, y);
+              if (i === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
             }
-            canvasCtx.closePath();
-            canvasCtx.stroke();
+            ctx.closePath();
+            ctx.stroke();
             
             // Inner hexagon
-            canvasCtx.strokeStyle = table.isDragging ? 'rgba(255, 136, 0, 0.5)' : 'rgba(0, 255, 255, 0.5)';
-            canvasCtx.lineWidth = 1;
+            ctx.strokeStyle = table.isDragging ? 'rgba(255, 136, 0, 0.5)' : 'rgba(0, 255, 255, 0.5)';
+            ctx.lineWidth = 1;
             const innerHexSize = hexSize * 0.8;
-            canvasCtx.beginPath();
+            ctx.beginPath();
             for (let i = 0; i < 6; i++) {
               const angle = (Math.PI / 3) * i;
               const x = tableX + innerHexSize * Math.cos(angle);
               const y = tableY + innerHexSize * Math.sin(angle);
-              if (i === 0) canvasCtx.moveTo(x, y);
-              else canvasCtx.lineTo(x, y);
+              if (i === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
             }
-            canvasCtx.closePath();
-            canvasCtx.stroke();
+            ctx.closePath();
+            ctx.stroke();
             
             // Table icon - holographic grid
-            canvasCtx.strokeStyle = table.isDragging ? '#FFA500' : '#00CED1';
-            canvasCtx.lineWidth = 1;
-            canvasCtx.shadowBlur = 5;
+            ctx.strokeStyle = table.isDragging ? '#FFA500' : '#00CED1';
+            ctx.lineWidth = 1;
+            ctx.shadowBlur = 5;
             
             const gridSize = 20;
             // Draw grid pattern
             for (let i = -1; i <= 1; i++) {
-              canvasCtx.beginPath();
-              canvasCtx.moveTo(tableX - gridSize, tableY + i * gridSize/2);
-              canvasCtx.lineTo(tableX + gridSize, tableY + i * gridSize/2);
-              canvasCtx.stroke();
+              ctx.beginPath();
+              ctx.moveTo(tableX - gridSize, tableY + i * gridSize/2);
+              ctx.lineTo(tableX + gridSize, tableY + i * gridSize/2);
+              ctx.stroke();
               
-              canvasCtx.beginPath();
-              canvasCtx.moveTo(tableX + i * gridSize/2, tableY - gridSize);
-              canvasCtx.lineTo(tableX + i * gridSize/2, tableY + gridSize);
-              canvasCtx.stroke();
+              ctx.beginPath();
+              ctx.moveTo(tableX + i * gridSize/2, tableY - gridSize);
+              ctx.lineTo(tableX + i * gridSize/2, tableY + gridSize);
+              ctx.stroke();
             }
             
             // Table name with futuristic font
-            canvasCtx.shadowBlur = 0;
-            canvasCtx.fillStyle = table.isDragging ? '#FFD700' : '#00FFFF';
-            canvasCtx.font = 'bold 14px monospace';
-            canvasCtx.textAlign = 'center';
-            canvasCtx.letterSpacing = '2px';
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = table.isDragging ? '#FFD700' : '#00FFFF';
+            ctx.font = 'bold 14px monospace';
+            ctx.textAlign = 'center';
+            ctx.letterSpacing = '2px';
             
             // Text background
-            const textMetrics = canvasCtx.measureText(table.name.toUpperCase());
+            const textMetrics = ctx.measureText(table.name.toUpperCase());
             const textWidth = textMetrics.width;
             const textHeight = 20;
             
-            canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            canvasCtx.fillRect(
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(
               tableX - textWidth/2 - 10, 
               tableY + hexSize + 10, 
               textWidth + 20, 
@@ -1627,9 +1609,9 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             );
             
             // Text border
-            canvasCtx.strokeStyle = table.isDragging ? '#FF8800' : '#00FFFF';
-            canvasCtx.lineWidth = 1;
-            canvasCtx.strokeRect(
+            ctx.strokeStyle = table.isDragging ? '#FF8800' : '#00FFFF';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(
               tableX - textWidth/2 - 10, 
               tableY + hexSize + 10, 
               textWidth + 20, 
@@ -1637,8 +1619,8 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             );
             
             // Draw text
-            canvasCtx.fillStyle = table.isDragging ? '#FFD700' : '#00FFFF';
-            canvasCtx.fillText(table.name.toUpperCase(), tableX, tableY + hexSize + 24);
+            ctx.fillStyle = table.isDragging ? '#FFD700' : '#00FFFF';
+            ctx.fillText(table.name.toUpperCase(), tableX, tableY + hexSize + 24);
           });
 
           // Draw drop zone
@@ -1648,8 +1630,8 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           const dropZoneHeight = dropZone.height * canvasRef.current.height;
           
           // Drop zone background
-          canvasCtx.fillStyle = 'rgba(0, 255, 255, 0.05)';
-          canvasCtx.fillRect(
+          ctx.fillStyle = 'rgba(0, 255, 255, 0.05)';
+          ctx.fillRect(
             dropZoneX - dropZoneWidth/2, 
             dropZoneY - dropZoneHeight/2, 
             dropZoneWidth, 
@@ -1657,31 +1639,31 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           );
           
           // Drop zone border
-          canvasCtx.strokeStyle = '#00FFFF';
-          canvasCtx.lineWidth = 2;
-          canvasCtx.setLineDash([10, 5]);
-          canvasCtx.shadowBlur = 10;
-          canvasCtx.shadowColor = '#00FFFF';
-          canvasCtx.strokeRect(
+          ctx.strokeStyle = '#00FFFF';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([10, 5]);
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = '#00FFFF';
+          ctx.strokeRect(
             dropZoneX - dropZoneWidth/2, 
             dropZoneY - dropZoneHeight/2, 
             dropZoneWidth, 
             dropZoneHeight
           );
-          canvasCtx.setLineDash([]);
+          ctx.setLineDash([]);
           
           // Drop zone label
-          canvasCtx.fillStyle = '#00FFFF';
-          canvasCtx.font = 'bold 16px monospace';
-          canvasCtx.textAlign = 'center';
-          canvasCtx.shadowBlur = 0;
-          canvasCtx.fillText('DROP ZONE', dropZoneX, dropZoneY - dropZoneHeight/2 - 10);
+          ctx.fillStyle = '#00FFFF';
+          ctx.font = 'bold 16px monospace';
+          ctx.textAlign = 'center';
+          ctx.shadowBlur = 0;
+          ctx.fillText('DROP ZONE', dropZoneX, dropZoneY - dropZoneHeight/2 - 10);
           
           // Show dropped tables count
           if (droppedTablesRef.current.length > 0) {
-            canvasCtx.fillStyle = '#FFD700';
-            canvasCtx.font = '14px monospace';
-            canvasCtx.fillText(
+            ctx.fillStyle = '#FFD700';
+            ctx.font = '14px monospace';
+            ctx.fillText(
               `${droppedTablesRef.current.length} TABLE${droppedTablesRef.current.length > 1 ? 'S' : ''}`, 
               dropZoneX, 
               dropZoneY
@@ -1696,18 +1678,18 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           
           // Button glow effect when hovering
           if (generateButtonHoverRef.current) {
-            const glowGradient = canvasCtx.createRadialGradient(buttonX, buttonY, 0, buttonX, buttonY, 80);
+            const glowGradient = ctx.createRadialGradient(buttonX, buttonY, 0, buttonX, buttonY, 80);
             glowGradient.addColorStop(0, 'rgba(255, 136, 0, 0.3)');
             glowGradient.addColorStop(1, 'rgba(255, 136, 0, 0)');
-            canvasCtx.fillStyle = glowGradient;
-            canvasCtx.fillRect(buttonX - 80, buttonY - 80, 160, 160);
+            ctx.fillStyle = glowGradient;
+            ctx.fillRect(buttonX - 80, buttonY - 80, 160, 160);
           }
           
           // Button background
-          canvasCtx.fillStyle = generateButtonHoverRef.current ? '#FF8800' : '#00CED1';
-          canvasCtx.shadowBlur = 15;
-          canvasCtx.shadowColor = generateButtonHoverRef.current ? '#FF8800' : '#00CED1';
-          canvasCtx.fillRect(
+          ctx.fillStyle = generateButtonHoverRef.current ? '#FF8800' : '#00CED1';
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = generateButtonHoverRef.current ? '#FF8800' : '#00CED1';
+          ctx.fillRect(
             buttonX - buttonWidth/2, 
             buttonY - buttonHeight/2, 
             buttonWidth, 
@@ -1715,9 +1697,9 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           );
           
           // Button border
-          canvasCtx.strokeStyle = generateButtonHoverRef.current ? '#FFD700' : '#00FFFF';
-          canvasCtx.lineWidth = 2;
-          canvasCtx.strokeRect(
+          ctx.strokeStyle = generateButtonHoverRef.current ? '#FFD700' : '#00FFFF';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(
             buttonX - buttonWidth/2, 
             buttonY - buttonHeight/2, 
             buttonWidth, 
@@ -1725,11 +1707,11 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           );
           
           // Button text
-          canvasCtx.fillStyle = '#000000';
-          canvasCtx.font = 'bold 16px monospace';
-          canvasCtx.textAlign = 'center';
-          canvasCtx.shadowBlur = 0;
-          canvasCtx.fillText('GENERATE', buttonX, buttonY + 5);
+          ctx.fillStyle = '#000000';
+          ctx.font = 'bold 16px monospace';
+          ctx.textAlign = 'center';
+          ctx.shadowBlur = 0;
+          ctx.fillText('GENERATE', buttonX, buttonY + 5);
           
           // Draw toast notification
           if (toast) {
@@ -1739,22 +1721,22 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             const toastY = 100;
             
             // Toast background
-            canvasCtx.fillStyle = toast.type === 'error' ? 'rgba(255, 0, 0, 0.9)' : 'rgba(0, 255, 255, 0.9)';
-            canvasCtx.shadowBlur = 20;
-            canvasCtx.shadowColor = toast.type === 'error' ? '#FF0000' : '#00FFFF';
-            canvasCtx.fillRect(toastX, toastY, toastWidth, toastHeight);
+            ctx.fillStyle = toast.type === 'error' ? 'rgba(255, 0, 0, 0.9)' : 'rgba(0, 255, 255, 0.9)';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = toast.type === 'error' ? '#FF0000' : '#00FFFF';
+            ctx.fillRect(toastX, toastY, toastWidth, toastHeight);
             
             // Toast border
-            canvasCtx.strokeStyle = toast.type === 'error' ? '#FF6666' : '#00FFFF';
-            canvasCtx.lineWidth = 2;
-            canvasCtx.strokeRect(toastX, toastY, toastWidth, toastHeight);
+            ctx.strokeStyle = toast.type === 'error' ? '#FF6666' : '#00FFFF';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(toastX, toastY, toastWidth, toastHeight);
             
             // Toast text
-            canvasCtx.fillStyle = '#FFFFFF';
-            canvasCtx.font = 'bold 16px monospace';
-            canvasCtx.textAlign = 'center';
-            canvasCtx.shadowBlur = 0;
-            canvasCtx.fillText(toast.message, canvasRef.current.width / 2, toastY + toastHeight / 2 + 5);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 16px monospace';
+            ctx.textAlign = 'center';
+            ctx.shadowBlur = 0;
+            ctx.fillText(toast.message, canvasRef.current.width / 2, toastY + toastHeight / 2 + 5);
           }
 
           // Process hand landmarks if available
@@ -1764,8 +1746,8 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
               const landmarks = results.multiHandLandmarks[i];
               
               // Draw hand skeleton with holographic effect
-              canvasCtx.shadowBlur = 15;
-              canvasCtx.shadowColor = '#00FFFF';
+              ctx.shadowBlur = 15;
+              ctx.shadowColor = '#00FFFF';
               
               // Draw connections with gradient
               HAND_CONNECTIONS.forEach(connection => {
@@ -1778,17 +1760,17 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
                 const endX = mirrorX(endPoint.x, canvasRef.current.width);
                 const endY = endPoint.y * canvasRef.current.height;
                 
-                const gradient = canvasCtx.createLinearGradient(startX, startY, endX, endY);
+                const gradient = ctx.createLinearGradient(startX, startY, endX, endY);
                 gradient.addColorStop(0, '#00FFFF');
                 gradient.addColorStop(0.5, '#00CED1');
                 gradient.addColorStop(1, '#00FFFF');
                 
-                canvasCtx.strokeStyle = gradient;
-                canvasCtx.lineWidth = 3;
-                canvasCtx.beginPath();
-                canvasCtx.moveTo(startX, startY);
-                canvasCtx.lineTo(endX, endY);
-                canvasCtx.stroke();
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
               });
               
               // Draw landmarks as glowing nodes
@@ -1797,29 +1779,29 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
                 const y = landmark.y * canvasRef.current.height;
                 
                 // Outer glow
-                const glowGradient = canvasCtx.createRadialGradient(x, y, 0, x, y, 10);
+                const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, 10);
                 glowGradient.addColorStop(0, 'rgba(255, 136, 0, 0.8)');
                 glowGradient.addColorStop(0.5, 'rgba(255, 136, 0, 0.3)');
                 glowGradient.addColorStop(1, 'rgba(255, 136, 0, 0)');
                 
-                canvasCtx.fillStyle = glowGradient;
-                canvasCtx.fillRect(x - 10, y - 10, 20, 20);
+                ctx.fillStyle = glowGradient;
+                ctx.fillRect(x - 10, y - 10, 20, 20);
                 
                 // Core node
-                canvasCtx.fillStyle = '#FFD700';
-                canvasCtx.shadowBlur = 10;
-                canvasCtx.shadowColor = '#FFD700';
-                canvasCtx.beginPath();
-                canvasCtx.arc(x, y, 4, 0, 2 * Math.PI);
-                canvasCtx.fill();
+                ctx.fillStyle = '#FFD700';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#FFD700';
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                ctx.fill();
                 
                 // Special highlighting for thumb and index tips (pinch points)
                 if (index === 4 || index === 8) {
-                  canvasCtx.strokeStyle = '#FF8800';
-                  canvasCtx.lineWidth = 2;
-                  canvasCtx.beginPath();
-                  canvasCtx.arc(x, y, 8, 0, 2 * Math.PI);
-                  canvasCtx.stroke();
+                  ctx.strokeStyle = '#FF8800';
+                  ctx.lineWidth = 2;
+                  ctx.beginPath();
+                  ctx.arc(x, y, 8, 0, 2 * Math.PI);
+                  ctx.stroke();
                 }
               });
 
@@ -1925,22 +1907,22 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
                 
                 // Animated rings
                 const ringTime = Date.now() * 0.003;
-                canvasCtx.shadowBlur = 20;
-                canvasCtx.shadowColor = '#FF8800';
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#FF8800';
                 
                 for (let i = 0; i < 3; i++) {
                   const radius = 15 + i * 10 + (Math.sin(ringTime + i) * 5);
                   const opacity = 0.5 - i * 0.15;
                   
-                  canvasCtx.strokeStyle = `rgba(255, 136, 0, ${opacity})`;
-                  canvasCtx.lineWidth = 2 - i * 0.5;
-                  canvasCtx.beginPath();
-                  canvasCtx.arc(pinchXPixel, pinchYPixel, radius, 0, 2 * Math.PI);
-                  canvasCtx.stroke();
+                  ctx.strokeStyle = `rgba(255, 136, 0, ${opacity})`;
+                  ctx.lineWidth = 2 - i * 0.5;
+                  ctx.beginPath();
+                  ctx.arc(pinchXPixel, pinchYPixel, radius, 0, 2 * Math.PI);
+                  ctx.stroke();
                 }
                 
                 // Energy core
-                const coreGradient = canvasCtx.createRadialGradient(
+                const coreGradient = ctx.createRadialGradient(
                   pinchXPixel, pinchYPixel, 0,
                   pinchXPixel, pinchYPixel, 15
                 );
@@ -1948,8 +1930,8 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
                 coreGradient.addColorStop(0.5, 'rgba(255, 136, 0, 0.6)');
                 coreGradient.addColorStop(1, 'rgba(255, 136, 0, 0)');
                 
-                canvasCtx.fillStyle = coreGradient;
-                canvasCtx.fillRect(pinchXPixel - 20, pinchYPixel - 20, 40, 40);
+                ctx.fillStyle = coreGradient;
+                ctx.fillRect(pinchXPixel - 20, pinchYPixel - 20, 40, 40);
               } else if (pinchState.isPinching) {
                 // Release pinch
                 generateButtonHoverRef.current = false; // Reset button state
@@ -1996,7 +1978,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             pinchStateRef.current = { isPinching: false, x: 0, y: 0 };
           }
 
-          canvasCtx.restore();
+          ctx.restore();
           renderAnimationId = requestAnimationFrame(renderLoop);
         };
 
