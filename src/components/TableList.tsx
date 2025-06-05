@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSupabaseTables } from '../hooks/useSupabaseTables';
+import { useSkySQLTables } from '../hooks/useSkySQLTables';
 
 export interface TableObject {
   id: string;
@@ -15,7 +15,7 @@ interface TableListProps {
 }
 
 const TableList: React.FC<TableListProps> = ({ tables, onTableAdd }) => {
-  const { tables: availableTables, loading, error } = useSupabaseTables();
+  const { tables: availableTables, loading, error } = useSkySQLTables();
 
   // For demo purposes, if no tables are found, show some example tables
   const displayTables = availableTables.length > 0 ? availableTables : ['users', 'posts', 'comments', 'products'];

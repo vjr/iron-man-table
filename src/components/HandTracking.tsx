@@ -2,7 +2,8 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Hands, Results, NormalizedLandmark } from '@mediapipe/hands';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { HAND_CONNECTIONS } from '@mediapipe/hands';
-import { useSupabaseTables } from '../hooks/useSupabaseTables';
+import { useSkySQLTables } from '../hooks/useSkySQLTables';
+import { skysql } from '../lib/skysql';
 
 interface HandTrackingProps {
   cameraId: string;
@@ -37,7 +38,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
   const [toast, setToast] = useState<{ message: string; type: 'info' | 'error' } | null>(null);
   const [loadingData, setLoadingData] = useState(false);
   const chartAnimationStartRef = useRef<number>(0);
-  const { tables: availableTables, tableSchemas, relationships, loading: tablesLoading } = useSupabaseTables();
+  const { tables: availableTables, tableSchemas, relationships, loading: tablesLoading } = useSkySQLTables();
   
   // Helper function to mirror hand coordinates
   const mirrorX = (x: number, canvasWidth: number) => {
@@ -155,8 +156,9 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
     if (!relationship) return null;
     
     try {
-      const { supabase } = await import('../lib/supabase');
-      
+      const { skysql } = await import('../lib/skysql');
+      let conn = await skysql.getConnection();
+
       // Determine query strategy based on table names and relationship
       const referencingTable = relationship.referencingTable;
       const referencedTable = relationship.referencedTable;
@@ -164,20 +166,27 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
       
       // Strategy 1: Users + Posts/Comments/Orders (show user activity)
       if (referencedTable.toLowerCase().includes('user') || referencedTable.toLowerCase().includes('customer')) {
-        const { data, error } = await supabase
-          .from(referencedTable)
-          .select(`
-            id,
-            name,
-            email,
-            title,
-            created,
-            createdAt,
-            created_at,
-            date,
-            ${referencingTable}:${referencingTable}(count)
-          `);
-        
+
+        // Use skysql connection to fetch referencedTable with count of referencingTable
+        const { rows: data, error } = await conn.query(
+          `
+          SELECT
+            ${referencedTable}.id,
+            ${referencedTable}.name,
+            ${referencedTable}.email,
+            ${referencedTable}.title,
+            ${referencedTable}.created,
+            ${referencedTable}.createdAt,
+            ${referencedTable}.created_at,
+            ${referencedTable}.date,
+            COUNT(${referencingTable}.${foreignKey}) AS item_count
+          FROM ${referencedTable}
+          LEFT JOIN ${referencingTable}
+            ON ${referencingTable}.${foreignKey} = ${referencedTable}.id
+          GROUP BY ${referencedTable}.id
+          `
+        );
+
         if (!error && data) {
           const processedData = data.map(user => ({
             ...user,
@@ -201,19 +210,25 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
       if (referencedTable.toLowerCase().includes('categor') || 
           referencingTable.toLowerCase().includes('product') ||
           referencingTable.toLowerCase().includes('item')) {
-        const { data, error } = await supabase
-          .from(referencedTable)
-          .select(`
-            id,
-            name,
-            title,
-            created,
-            createdAt,
-            created_at,
-            date,
-            ${referencingTable}:${referencingTable}(count)
-          `);
-        
+
+        const { rows: data, error } = await conn.query(
+          `
+          SELECT
+            ${referencedTable}.id,
+            ${referencedTable}.name,
+            ${referencedTable}.title,
+            ${referencedTable}.created,
+            ${referencedTable}.createdAt,
+            ${referencedTable}.created_at,
+            ${referencedTable}.date,
+            COUNT(${referencingTable}.${foreignKey}) AS item_count
+          FROM ${referencedTable}
+          LEFT JOIN ${referencingTable}
+            ON ${referencingTable}.${foreignKey} = ${referencedTable}.id
+          GROUP BY ${referencedTable}.id
+          `
+        );
+
         if (!error && data) {
           const processedData = data.map(category => ({
             ...category,
@@ -234,13 +249,24 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
       }
       
       // Strategy 3: Generic aggregation (count references)
-      const { data, error } = await supabase
-        .from(referencingTable)
-        .select(`
-          ${foreignKey},
-          ${referencedTable}:${referencedTable}(name, title, id, created, createdAt, created_at, date)
-        `);
-      
+      // Use skysql connection to fetch referencingTable with referencedTable joined
+      const { rows: data, error } = await conn.query(
+        `
+        SELECT
+          ${referencingTable}.${foreignKey},
+          ${referencedTable}.name,
+          ${referencedTable}.title,
+          ${referencedTable}.id,
+          ${referencedTable}.created,
+          ${referencedTable}.createdAt,
+          ${referencedTable}.created_at,
+          ${referencedTable}.date
+        FROM ${referencingTable}
+        LEFT JOIN ${referencedTable}
+          ON ${referencingTable}.${foreignKey} = ${referencedTable}.id
+        `
+      );
+
       if (!error && data) {
         // Group and count by referenced item
         const counts = new Map();
@@ -262,7 +288,9 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             counts.get(key).count++;
           }
         });
-        
+
+        if (conn) await conn.end();
+
         const processedData = Array.from(counts.values());
         
         return {
@@ -339,122 +367,8 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
     };
   };
 
-  // Special handling for events + registrations tables
-  const fetchEventsRegistrationsData = async () => {
-    setLoadingData(true);
-    try {
-      const { supabase } = await import('../lib/supabase');
-      
-      // Perform join query to get events with registration counts
-      const { data, error } = await supabase
-        .from('events')
-        .select(`
-          id,
-          title,
-          name,
-          registrations:registrations(count)
-        `);
-      
-      if (error) {
-        console.error('Error fetching events with registrations:', error);
-        // Fallback to separate queries if join fails
-        return await fetchSeparateEventsRegistrations();
-      }
-      
-      // Transform the data to include registration counts
-      const eventsWithCounts = data?.map(event => ({
-        ...event,
-        registration_count: event.registrations?.length || 0,
-        _table: 'events'
-      })) || [];
-      
-      setChartData({ 
-        tables: ['events', 'registrations'], 
-        data: eventsWithCounts,
-        isEventsRegistrations: true 
-      });
-      setLoadingData(false);
-    } catch (err) {
-      console.error('Error loading events and registrations:', err);
-      await fetchSeparateEventsRegistrations();
-    }
-  };
-
-  // Fallback method using separate queries
-  const fetchSeparateEventsRegistrations = async () => {
-    try {
-      const { supabase } = await import('../lib/supabase');
-      
-      // Get events
-      const { data: events, error: eventsError } = await supabase
-        .from('events')
-        .select('*');
-      
-      // Get registrations
-      const { data: registrations, error: registrationsError } = await supabase
-        .from('registrations')
-        .select('*');
-      
-      if (eventsError || registrationsError) {
-        throw new Error('Failed to fetch events or registrations');
-      }
-      
-      // Count registrations per event
-      const eventCounts = new Map();
-      events?.forEach(event => {
-        eventCounts.set(event.id, { ...event, registration_count: 0 });
-      });
-      
-      // Count registrations by event_id
-      registrations?.forEach(registration => {
-        const eventId = registration.event_id || registration.eventId || registration.events_id;
-        if (eventId && eventCounts.has(eventId)) {
-          const event = eventCounts.get(eventId);
-          event.registration_count++;
-        }
-      });
-      
-      const eventsWithCounts = Array.from(eventCounts.values()).map(event => ({
-        ...event,
-        _table: 'events'
-      }));
-      
-      setChartData({ 
-        tables: ['events', 'registrations'], 
-        data: eventsWithCounts,
-        isEventsRegistrations: true 
-      });
-      setLoadingData(false);
-    } catch (err) {
-      console.error('Error in fallback query:', err);
-      setLoadingData(false);
-      // Use demo data for events and registrations
-      const demoEvents = Array.from({ length: 8 }, (_, i) => ({
-        id: i + 1,
-        title: `Event ${i + 1}`,
-        name: `Conference ${i + 1}`,
-        registration_count: Math.floor(Math.random() * 50) + 5,
-        _table: 'events'
-      }));
-      
-      setChartData({ 
-        tables: ['events', 'registrations'], 
-        data: demoEvents,
-        isEventsRegistrations: true 
-      });
-    }
-  };
-
-  // Fetch data from Supabase tables
+  // Fetch data from SkySQL tables
   const fetchTableData = async (tableNames: string[]) => {
-    // Check for special events + registrations combination
-    const hasEvents = tableNames.some(name => name.toLowerCase().includes('event'));
-    const hasRegistrations = tableNames.some(name => name.toLowerCase().includes('registration'));
-    
-    if (hasEvents && hasRegistrations && tableNames.length === 2) {
-      return await fetchEventsRegistrationsData();
-    }
-    
     // Check for schema-based relationships for intelligent join queries
     if (tableNames.length === 2 && relationships.length > 0) {
       const joinResult = await createJoinQuery(tableNames);
@@ -476,14 +390,14 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
     
     setLoadingData(true);
     try {
-      const { supabase } = await import('../lib/supabase');
+      const { skysql } = await import('../lib/skysql');
+      let conn = await skysql.getConnection();
+
       const allData: any[] = [];
       
       for (const tableName of tableNames) {
         try {
-          const { data, error } = await supabase
-            .from(tableName)
-            .select('*');
+          const { rows: data, error } = await conn.query(`SELECT * FROM ${tableName}`);
           
           if (error) {
             console.error(`Error fetching ${tableName}:`, error);
@@ -500,13 +414,16 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           console.error(`Failed to fetch ${tableName}:`, err);
         }
       }
-      
+
+      if (conn) await conn.end();
+
       setChartData({ tables: tableNames, data: allData });
       setLoadingData(false);
     } catch (err) {
-      console.error('Error loading Supabase:', err);
+      console.error('Error loading SkySQL client:', err);
       setLoadingData(false);
-      // Use demo data if Supabase fails with relationships
+      // Use demo data if SkySQL client fails with relationships
+      console.info('Using demo data due to error');
       const demoData = tableNames.flatMap((table, tableIndex) => 
         Array.from({ length: 5 }, (_, i) => {
           const baseRecord = {
