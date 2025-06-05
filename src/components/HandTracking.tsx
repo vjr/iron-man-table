@@ -191,6 +191,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             activity_count: user.item_count || 0,
             _table: referencedTable
           }));
+
           return {
             type: 'user_activity',
             title: `${referencedTable.toUpperCase()} ACTIVITY`,
@@ -202,6 +203,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           };
         }
       }
+
       // Strategy 2: Categories + Products (show category popularity)
       if (referencedTable.toLowerCase().includes('categor') || 
           referencingTable.toLowerCase().includes('product') ||
@@ -234,6 +236,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             item_count: category.item_count || 0,
             _table: referencedTable
           }));
+
           return {
             type: 'category_distribution',
             title: 'CATEGORY DISTRIBUTION',
@@ -245,6 +248,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           };
         }
       }
+
       // Strategy 3: Generic aggregation (count references)
       const response = await fetch('http://localhost:3001/query', {
         method: 'POST',
@@ -284,7 +288,9 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           }
           counts.get(key).count++;
         });
+
         const processedData = Array.from(counts.values());
+
         return {
           type: 'relationship_count',
           title: 'RELATIONSHIP ANALYSIS',
@@ -379,9 +385,11 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
         return;
       }
     }
+
     setLoadingData(true);
     try {
       const allData: any[] = [];
+
       for (const tableName of tableNames) {
         try {
           const response = await fetch('http://localhost:3001/query', {
@@ -392,6 +400,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           const { result } = await response.json();
           const data = result;
           if (data && data.length > 0) {
+            // Add table source to each record
             data.forEach(record => {
               record._table = tableName;
               allData.push(record);
@@ -401,6 +410,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           console.error(`Failed to fetch ${tableName}:`, err);
         }
       }
+
       setChartData({ tables: tableNames, data: allData });
       setLoadingData(false);
     } catch (err) {
@@ -417,11 +427,13 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             title: `${table} Title ${i + 1}`,
             _table: table
           };
+
           // Add foreign key relationships for demo
           if (tableNames.length === 2 && tableIndex === 1) {
             // Second table references first table
             baseRecord[`${tableNames[0]}_id`] = Math.floor(Math.random() * 5) + 1;
           }
+
           return baseRecord;
         })
       );
@@ -1153,7 +1165,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             count: data.count,
             table: data.table
           }))
-          ; // No limit - show all data
+; // No limit - show all data
       }
       
       const maxItems = Math.min(groupedData.length, 30); // Show more items in regular charts
@@ -1215,7 +1227,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
         ctx.fillText(group.label, 0, 0);
         ctx.restore();
       });
-
+      
       // Y-axis label
       ctx.fillStyle = '#00FFFF';
       ctx.font = '14px monospace';
@@ -1225,7 +1237,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
       ctx.rotate(-Math.PI / 2);
       ctx.fillText('COUNT', 0, 0);
       ctx.restore();
-
+      
       // X-axis label
       ctx.fillStyle = '#00FFFF';
       ctx.font = '14px monospace';
@@ -1621,46 +1633,46 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             // Draw text
             canvasCtx.fillStyle = table.isDragging ? '#FFD700' : '#00FFFF';
             canvasCtx.fillText(table.name.toUpperCase(), tableX, tableY + hexSize + 24);
-            });
+              });
 
-            // Draw drop zone
-            const dropZoneX = dropZone.x * canvasRef.current.width;
-            const dropZoneY = dropZone.y * canvasRef.current.height;
-            const dropZoneWidth = dropZone.width * canvasRef.current.width;
-            const dropZoneHeight = dropZone.height * canvasRef.current.height;
-            
-            // Drop zone background
-            canvasCtx.fillStyle = 'rgba(0, 255, 255, 0.05)';
-            canvasCtx.fillRect(
+          // Draw drop zone
+          const dropZoneX = dropZone.x * canvasRef.current.width;
+          const dropZoneY = dropZone.y * canvasRef.current.height;
+          const dropZoneWidth = dropZone.width * canvasRef.current.width;
+          const dropZoneHeight = dropZone.height * canvasRef.current.height;
+          
+          // Drop zone background
+          canvasCtx.fillStyle = 'rgba(0, 255, 255, 0.05)';
+          canvasCtx.fillRect(
             dropZoneX - dropZoneWidth/2, 
             dropZoneY - dropZoneHeight/2, 
             dropZoneWidth, 
             dropZoneHeight
-            );
-            
-            // Drop zone border
-            canvasCtx.strokeStyle = '#00FFFF';
-            canvasCtx.lineWidth = 2;
-            canvasCtx.setLineDash([10, 5]);
-            canvasCtx.shadowBlur = 10;
-            canvasCtx.shadowColor = '#00FFFF';
-            canvasCtx.strokeRect(
+          );
+          
+          // Drop zone border
+          canvasCtx.strokeStyle = '#00FFFF';
+          canvasCtx.lineWidth = 2;
+          canvasCtx.setLineDash([10, 5]);
+          canvasCtx.shadowBlur = 10;
+          canvasCtx.shadowColor = '#00FFFF';
+          canvasCtx.strokeRect(
             dropZoneX - dropZoneWidth/2, 
             dropZoneY - dropZoneHeight/2, 
             dropZoneWidth, 
             dropZoneHeight
-            );
-            canvasCtx.setLineDash([]);
-            
-            // Drop zone label
-            canvasCtx.fillStyle = '#00FFFF';
-            canvasCtx.font = 'bold 16px monospace';
-            canvasCtx.textAlign = 'center';
-            canvasCtx.shadowBlur = 0;
-            canvasCtx.fillText('DROP ZONE', dropZoneX, dropZoneY - dropZoneHeight/2 - 10);
-            
-            // Show dropped tables count
-            if (droppedTablesRef.current.length > 0) {
+          );
+          canvasCtx.setLineDash([]);
+          
+          // Drop zone label
+          canvasCtx.fillStyle = '#00FFFF';
+          canvasCtx.font = 'bold 16px monospace';
+          canvasCtx.textAlign = 'center';
+          canvasCtx.shadowBlur = 0;
+          canvasCtx.fillText('DROP ZONE', dropZoneX, dropZoneY - dropZoneHeight/2 - 10);
+          
+          // Show dropped tables count
+          if (droppedTablesRef.current.length > 0) {
             canvasCtx.fillStyle = '#FFD700';
             canvasCtx.font = '14px monospace';
             canvasCtx.fillText(
@@ -1668,53 +1680,53 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
               dropZoneX, 
               dropZoneY
             );
-            }
-            
-            // Generate button
-            const buttonX = dropZoneX + dropZoneWidth/2 + 60;
-            const buttonY = dropZoneY;
-            const buttonWidth = 120;
-            const buttonHeight = 40;
-            
-            // Button glow effect when hovering
-            if (generateButtonHoverRef.current) {
+          }
+          
+          // Generate button
+          const buttonX = dropZoneX + dropZoneWidth/2 + 60;
+          const buttonY = dropZoneY;
+          const buttonWidth = 120;
+          const buttonHeight = 40;
+          
+          // Button glow effect when hovering
+          if (generateButtonHoverRef.current) {
             const glowGradient = canvasCtx.createRadialGradient(buttonX, buttonY, 0, buttonX, buttonY, 80);
             glowGradient.addColorStop(0, 'rgba(255, 136, 0, 0.3)');
             glowGradient.addColorStop(1, 'rgba(255, 136, 0, 0)');
             canvasCtx.fillStyle = glowGradient;
             canvasCtx.fillRect(buttonX - 80, buttonY - 80, 160, 160);
-            }
-            
-            // Button background
-            canvasCtx.fillStyle = generateButtonHoverRef.current ? '#FF8800' : '#00CED1';
-            canvasCtx.shadowBlur = 15;
-            canvasCtx.shadowColor = generateButtonHoverRef.current ? '#FF8800' : '#00CED1';
-            canvasCtx.fillRect(
+          }
+          
+          // Button background
+          canvasCtx.fillStyle = generateButtonHoverRef.current ? '#FF8800' : '#00CED1';
+          canvasCtx.shadowBlur = 15;
+          canvasCtx.shadowColor = generateButtonHoverRef.current ? '#FF8800' : '#00CED1';
+          canvasCtx.fillRect(
             buttonX - buttonWidth/2, 
             buttonY - buttonHeight/2, 
             buttonWidth, 
             buttonHeight
-            );
-            
-            // Button border
-            canvasCtx.strokeStyle = generateButtonHoverRef.current ? '#FFD700' : '#00FFFF';
-            canvasCtx.lineWidth = 2;
-            canvasCtx.strokeRect(
+          );
+          
+          // Button border
+          canvasCtx.strokeStyle = generateButtonHoverRef.current ? '#FFD700' : '#00FFFF';
+          canvasCtx.lineWidth = 2;
+          canvasCtx.strokeRect(
             buttonX - buttonWidth/2, 
             buttonY - buttonHeight/2, 
             buttonWidth, 
             buttonHeight
-            );
-            
-            // Button text
-            canvasCtx.fillStyle = '#000000';
-            canvasCtx.font = 'bold 16px monospace';
-            canvasCtx.textAlign = 'center';
-            canvasCtx.shadowBlur = 0;
-            canvasCtx.fillText('GENERATE', buttonX, buttonY + 5);
-            
-            // Draw toast notification
-            if (toast) {
+          );
+          
+          // Button text
+          canvasCtx.fillStyle = '#000000';
+          canvasCtx.font = 'bold 16px monospace';
+          canvasCtx.textAlign = 'center';
+          canvasCtx.shadowBlur = 0;
+          canvasCtx.fillText('GENERATE', buttonX, buttonY + 5);
+          
+          // Draw toast notification
+          if (toast) {
             const toastWidth = 400;
             const toastHeight = 60;
             const toastX = canvasRef.current.width / 2 - toastWidth / 2;
@@ -1737,11 +1749,11 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             canvasCtx.textAlign = 'center';
             canvasCtx.shadowBlur = 0;
             canvasCtx.fillText(toast.message, canvasRef.current.width / 2, toastY + toastHeight / 2 + 5);
-            }
+          }
 
-            // Process hand landmarks if available
-            const results = handResultsRef.current;
-            if (results && results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+          // Process hand landmarks if available
+          const results = handResultsRef.current;
+          if (results && results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
             for (let i = 0; i < results.multiHandLandmarks.length; i++) {
               const landmarks = results.multiHandLandmarks[i];
               
@@ -1751,58 +1763,58 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
               
               // Draw connections with gradient
               HAND_CONNECTIONS.forEach(connection => {
-              const [start, end] = connection;
-              const startPoint = landmarks[start];
-              const endPoint = landmarks[end];
-              
-              const startX = mirrorX(startPoint.x, canvasRef.current.width);
-              const startY = startPoint.y * canvasRef.current.height;
-              const endX = mirrorX(endPoint.x, canvasRef.current.width);
-              const endY = endPoint.y * canvasRef.current.height;
-              
-              const gradient = canvasCtx.createLinearGradient(startX, startY, endX, endY);
-              gradient.addColorStop(0, '#00FFFF');
-              gradient.addColorStop(0.5, '#00CED1');
-              gradient.addColorStop(1, '#00FFFF');
-              
-              canvasCtx.strokeStyle = gradient;
-              canvasCtx.lineWidth = 3;
-              canvasCtx.beginPath();
-              canvasCtx.moveTo(startX, startY);
-              canvasCtx.lineTo(endX, endY);
-              canvasCtx.stroke();
+                const [start, end] = connection;
+                const startPoint = landmarks[start];
+                const endPoint = landmarks[end];
+                
+                const startX = mirrorX(startPoint.x, canvasRef.current.width);
+                const startY = startPoint.y * canvasRef.current.height;
+                const endX = mirrorX(endPoint.x, canvasRef.current.width);
+                const endY = endPoint.y * canvasRef.current.height;
+                
+                const gradient = canvasCtx.createLinearGradient(startX, startY, endX, endY);
+                gradient.addColorStop(0, '#00FFFF');
+                gradient.addColorStop(0.5, '#00CED1');
+                gradient.addColorStop(1, '#00FFFF');
+                
+                canvasCtx.strokeStyle = gradient;
+                canvasCtx.lineWidth = 3;
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(startX, startY);
+                canvasCtx.lineTo(endX, endY);
+                canvasCtx.stroke();
               });
               
               // Draw landmarks as glowing nodes
               landmarks.forEach((landmark, index) => {
-              const x = mirrorX(landmark.x, canvasRef.current.width);
-              const y = landmark.y * canvasRef.current.height;
-              
-              // Outer glow
-              const glowGradient = canvasCtx.createRadialGradient(x, y, 0, x, y, 10);
-              glowGradient.addColorStop(0, 'rgba(255, 136, 0, 0.8)');
-              glowGradient.addColorStop(0.5, 'rgba(255, 136, 0, 0.3)');
-              glowGradient.addColorStop(1, 'rgba(255, 136, 0, 0)');
-              
-              canvasCtx.fillStyle = glowGradient;
-              canvasCtx.fillRect(x - 10, y - 10, 20, 20);
-              
-              // Core node
-              canvasCtx.fillStyle = '#FFD700';
-              canvasCtx.shadowBlur = 10;
-              canvasCtx.shadowColor = '#FFD700';
-              canvasCtx.beginPath();
-              canvasCtx.arc(x, y, 4, 0, 2 * Math.PI);
-              canvasCtx.fill();
-              
-              // Special highlighting for thumb and index tips (pinch points)
-              if (index === 4 || index === 8) {
-                canvasCtx.strokeStyle = '#FF8800';
-                canvasCtx.lineWidth = 2;
+                const x = mirrorX(landmark.x, canvasRef.current.width);
+                const y = landmark.y * canvasRef.current.height;
+                
+                // Outer glow
+                const glowGradient = canvasCtx.createRadialGradient(x, y, 0, x, y, 10);
+                glowGradient.addColorStop(0, 'rgba(255, 136, 0, 0.8)');
+                glowGradient.addColorStop(0.5, 'rgba(255, 136, 0, 0.3)');
+                glowGradient.addColorStop(1, 'rgba(255, 136, 0, 0)');
+                
+                canvasCtx.fillStyle = glowGradient;
+                canvasCtx.fillRect(x - 10, y - 10, 20, 20);
+                
+                // Core node
+                canvasCtx.fillStyle = '#FFD700';
+                canvasCtx.shadowBlur = 10;
+                canvasCtx.shadowColor = '#FFD700';
                 canvasCtx.beginPath();
-                canvasCtx.arc(x, y, 8, 0, 2 * Math.PI);
-                canvasCtx.stroke();
-              }
+                canvasCtx.arc(x, y, 4, 0, 2 * Math.PI);
+                canvasCtx.fill();
+                
+                // Special highlighting for thumb and index tips (pinch points)
+                if (index === 4 || index === 8) {
+                  canvasCtx.strokeStyle = '#FF8800';
+                  canvasCtx.lineWidth = 2;
+                  canvasCtx.beginPath();
+                  canvasCtx.arc(x, y, 8, 0, 2 * Math.PI);
+                  canvasCtx.stroke();
+                }
               });
 
               // Get all relevant landmarks
@@ -1817,8 +1829,8 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
               
               // Calculate distance between thumb and index finger for pinch
               const distance = Math.sqrt(
-              Math.pow(thumbTip.x - indexTip.x, 2) + 
-              Math.pow(thumbTip.y - indexTip.y, 2)
+                Math.pow(thumbTip.x - indexTip.x, 2) + 
+                Math.pow(thumbTip.y - indexTip.y, 2)
               );
               
               // Pinch threshold (adjust as needed)
@@ -1827,75 +1839,75 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
               const pinchState = pinchStateRef.current;
               
               if (isPinching) {
-              // Calculate pinch center (mirror X coordinate)
-              const pinchX = 1 - (thumbTip.x + indexTip.x) / 2; // Mirror the X coordinate
-              const pinchY = (thumbTip.y + indexTip.y) / 2;
-              
-              if (!pinchState.isPinching) {
-                // Start pinching - check if near generate button first
-                const buttonX = (dropZoneX + dropZoneWidth/2 + 60) / canvasRef.current.width;
-                const buttonY = dropZoneY / canvasRef.current.height;
-                const buttonWidth = 120 / canvasRef.current.width;
-                const buttonHeight = 40 / canvasRef.current.height;
+                // Calculate pinch center (mirror X coordinate)
+                const pinchX = 1 - (thumbTip.x + indexTip.x) / 2; // Mirror the X coordinate
+                const pinchY = (thumbTip.y + indexTip.y) / 2;
                 
-                const buttonLeft = buttonX - buttonWidth/2;
-                const buttonRight = buttonX + buttonWidth/2;
-                const buttonTop = buttonY - buttonHeight/2;
-                const buttonBottom = buttonY + buttonHeight/2;
-                
-                if (pinchX >= buttonLeft && pinchX <= buttonRight &&
-                  pinchY >= buttonTop && pinchY <= buttonBottom) {
-                // Pinching the generate button
-                generateButtonHoverRef.current = true;
-                if (!buttonClickedRef.current) {
-                  buttonClickedRef.current = true;
+                if (!pinchState.isPinching) {
+                  // Start pinching - check if near generate button first
+                  const buttonX = (dropZoneX + dropZoneWidth/2 + 60) / canvasRef.current.width;
+                  const buttonY = dropZoneY / canvasRef.current.height;
+                  const buttonWidth = 120 / canvasRef.current.width;
+                  const buttonHeight = 40 / canvasRef.current.height;
                   
-                  if (droppedTablesRef.current.length === 0) {
-                  showToast('Please drop at least one table into the drop zone', 'error');
-                  } else {
-                  console.log('Generating chart with tables:', droppedTablesRef.current);
-                  showToast(`Creating chart with ${droppedTablesRef.current.length} table(s)`, 'info');
+                  const buttonLeft = buttonX - buttonWidth/2;
+                  const buttonRight = buttonX + buttonWidth/2;
+                  const buttonTop = buttonY - buttonHeight/2;
+                  const buttonBottom = buttonY + buttonHeight/2;
                   
-                  // Fetch data and show chart
-                  fetchTableData([...droppedTablesRef.current]);
-                  
-                  // Delay to show toast before chart
-                  setTimeout(() => {
-                    showChartWithAnimation();
-                  }, 500);
+                  if (pinchX >= buttonLeft && pinchX <= buttonRight &&
+                    pinchY >= buttonTop && pinchY <= buttonBottom) {
+                  // Pinching the generate button
+                  generateButtonHoverRef.current = true;
+                  if (!buttonClickedRef.current) {
+                    buttonClickedRef.current = true;
+                    
+                    if (droppedTablesRef.current.length === 0) {
+                    showToast('Please drop at least one table into the drop zone', 'error');
+                    } else {
+                    console.log('Generating chart with tables:', droppedTablesRef.current);
+                    showToast(`Creating chart with ${droppedTablesRef.current.length} table(s)`, 'info');
+                    
+                    // Fetch data and show chart
+                    fetchTableData([...droppedTablesRef.current]);
+                    
+                    // Delay to show toast before chart
+                    setTimeout(() => {
+                      showChartWithAnimation();
+                    }, 500);
+                    }
                   }
-                }
                 } else {
-                // Check if near any table
-                const tableSize = 60 / Math.min(canvasRef.current.width, canvasRef.current.height);
-                
-                for (const table of currentTables) {
-                  const distToTable = Math.sqrt(
-                  Math.pow(pinchX - table.x, 2) + 
-                  Math.pow(pinchY - table.y, 2)
-                  );
+                  // Check if near any table
+                  const tableSize = 60 / Math.min(canvasRef.current.width, canvasRef.current.height);
                   
-                  if (distToTable < tableSize) {
-                  // Start dragging this table
-                  draggedTableRef.current = table.id;
-                  table.isDragging = true;
-                  break;
+                  for (const table of currentTables) {
+                    const distToTable = Math.sqrt(
+                      Math.pow(pinchX - table.x, 2) + 
+                      Math.pow(pinchY - table.y, 2)
+                    );
+                    
+                    if (distToTable < tableSize) {
+                      // Start dragging this table
+                      draggedTableRef.current = table.id;
+                      table.isDragging = true;
+                      break;
+                    }
                   }
-                }
                 }
                 
                 pinchStateRef.current = { isPinching: true, x: pinchX, y: pinchY };
               } else {
                 // Continue pinching - update dragged table position
                 if (draggedTableRef.current) {
-                const deltaX = pinchX - pinchState.x;
-                const deltaY = pinchY - pinchState.y;
-                
-                const draggedTable = currentTables.find(t => t.id === draggedTableRef.current);
-                if (draggedTable) {
-                  draggedTable.x = Math.max(0.05, Math.min(0.95, draggedTable.x + deltaX));
-                  draggedTable.y = Math.max(0.05, Math.min(0.95, draggedTable.y + deltaY));
-                }
+                  const deltaX = pinchX - pinchState.x;
+                  const deltaY = pinchY - pinchState.y;
+                  
+                  const draggedTable = currentTables.find(t => t.id === draggedTableRef.current);
+                  if (draggedTable) {
+                    draggedTable.x = Math.max(0.05, Math.min(0.95, draggedTable.x + deltaX));
+                    draggedTable.y = Math.max(0.05, Math.min(0.95, draggedTable.y + deltaY));
+                  }
                 }
                 
                 pinchStateRef.current = { isPinching: true, x: pinchX, y: pinchY };
@@ -1965,20 +1977,20 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
               }
               
             }
-            } else if (pinchStateRef.current.isPinching) {
+          } else if (pinchStateRef.current.isPinching) {
             // No hands detected, release pinch
             generateButtonHoverRef.current = false; // Reset button state
             if (draggedTableRef.current) {
               const draggedTable = currentTables.find(t => t.id === draggedTableRef.current);
               if (draggedTable) {
-              draggedTable.isDragging = false;
+                draggedTable.isDragging = false;
               }
               draggedTableRef.current = null;
             }
             pinchStateRef.current = { isPinching: false, x: 0, y: 0 };
-            }
+          }
 
-            canvasCtx.restore();
+          canvasCtx.restore();
           renderAnimationId = requestAnimationFrame(renderLoop);
         };
 
