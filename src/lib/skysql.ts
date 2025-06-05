@@ -1,4 +1,6 @@
 import mariadb from 'mariadb';
+import dotenv from 'dotenv';
+dotenv.config();
 
 interface SkySQLConfig {
     host: string;
@@ -46,11 +48,11 @@ class SkySQLClient {
 }
 
 const skysqlConfig: SkySQLConfig = {
-    host: import.meta.env.VITE_SKYSQL_HOSTNAME,
-    user: import.meta.env.VITE_SKYSQL_USERNAME,
-    password: import.meta.env.VITE_SKYSQL_PASSWORD,
-    database: import.meta.env.VITE_SKYSQL_DATABASE,
-    port: parseInt(import.meta.env.VITE_SKYSQL_PORT || '3306', 10),
+    host: process.env.VITE_SKYSQL_HOSTNAME!,
+    user: process.env.VITE_SKYSQL_USERNAME!,
+    password: process.env.VITE_SKYSQL_PASSWORD!,
+    database: process.env.VITE_SKYSQL_DATABASE!,
+    port: parseInt(process.env.VITE_SKYSQL_PORT || '3306', 10),
 }
 
 if (!skysqlConfig.host || !skysqlConfig.user || !skysqlConfig.password || !skysqlConfig.database) {
