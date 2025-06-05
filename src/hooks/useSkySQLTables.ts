@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 
-const { skysql } = await import('../lib/skysql');
-
 interface TableSchema {
   name: string;
   columns: { name: string; type: string; foreignKey?: string }[];
@@ -22,39 +20,29 @@ export const useSkySQLTables = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const detectForeignKeys = (tableName: string, columns: any[]): { name: string; type: string; foreignKey?: string }[] => {
-    return columns.map(col => {
+  const detectForeignKeys = async (tableName: string, columns: any[]): Promise<{ name: string; type: string; foreignKey?: string }[]> => {
+    return Promise.all(columns.map(async col => {
       const columnInfo: { name: string; type: string; foreignKey?: string } = {
         name: col.column_name,
         type: col.data_type
       };
 
-      // Check if this column is a foreign key by querying information_schema.key_column_usage
-      const fkQuery = `
-        SELECT referenced_table_name
-        FROM information_schema.key_column_usage
-        WHERE table_schema = ?
-          AND table_name = ?
-          AND column_name = ?
-          AND referenced_table_name IS NOT NULL
-        LIMIT 1
-      `;
-
-      // This function is now async, so we need to handle it accordingly in the caller
-      skysql.getConnection()
-        .then(async conn => {
-          try {
-            const result = await conn.query(fkQuery, [skysql.config.database, tableName, col.column_name]);
-            if (result.length > 0 && result[0].referenced_table_name) {
-              columnInfo.foreignKey = result[0].referenced_table_name;
-            }
-          } finally {
-            await conn.end();
-          }
-        });
+      // Replace foreign key detection with a call to the skysql query endpoint
+      const foreignKeyRes = await fetch('http://localhost:3001/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sql: `SELECT REFERENCED_TABLE_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL`,
+          params: [tableName, col.column_name]
+        })
+      });
+      const foreignKeyData = await foreignKeyRes.json();
+      if (foreignKeyData.result && foreignKeyData.result.length > 0) {
+        columnInfo.foreignKey = foreignKeyData.result[0].REFERENCED_TABLE_NAME;
+      }
 
       return columnInfo;
-    });
+    }));
   };
 
   const findTableRelationships = (schemas: TableSchema[]): TableRelationship[] => {
@@ -86,40 +74,43 @@ export const useSkySQLTables = () => {
 
   useEffect(() => {
     const fetchTables = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        let conn;
-        try {
-          conn = await skysql.getConnection();
+        // Fetch table names from the backend REST API
+        const tablesRes = await fetch('http://localhost:3001/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sql: "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()"
+          })
+        });
+        const tablesData = await tablesRes.json();
+        const tableNames = tablesData.result.map((row: any) => row.table_name);
+        setTables(tableNames);
 
-          // Get table names
-          const tablesResult = await conn.query(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = ?",
-            [skysql.config.database]
-          );
-          const tableNames = tablesResult.map((row: any) => row.table_name);
-          setTables(tableNames);
-
-          // Get columns for each table
-          const schemas: TableSchema[] = [];
-          for (const tableName of tableNames) {
-            const columnsResult = await conn.query(
-              "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = ? AND table_name = ?",
-              [skysql.config.database, tableName]
-            );
-            schemas.push({
-              name: tableName,
-              columns: detectForeignKeys(tableName, columnsResult)
-            });
-          }
-
-          setTableSchemas(schemas);
-          setRelationships(findTableRelationships(schemas));
-        } finally {
-          if (conn) await conn.end();
+        // Fetch columns for each table
+        const schemas: TableSchema[] = [];
+        for (const tableName of tableNames) {
+          const columnsRes = await fetch('http://localhost:3001/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sql: "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?",
+              params: [tableName]
+            })
+          });
+          const columnsData = await columnsRes.json();
+          schemas.push({
+            name: tableName,
+            columns: await detectForeignKeys(tableName, columnsData.result)
+          });
         }
+        setTableSchemas(schemas);
+        setRelationships(findTableRelationships(schemas));
       } catch (err) {
         console.error('Error:', err);
-        setError('Failed to connect to SkySQL');
+        setError('Failed to fetch tables from SkySQL REST API');
       } finally {
         setLoading(false);
       }
