@@ -24,7 +24,7 @@ class SkySQLClient {
             password: config.password,
             database: config.database,
             port: config.port || 3306,
-            ssl: config.ssl ?? false,
+            ssl: config.ssl ?? true,
             connectionLimit: config.connectionLimit || 5,
         });
     }
@@ -53,6 +53,7 @@ const skysqlConfig: SkySQLConfig = {
     password: process.env.VITE_SKYSQL_PASSWORD!,
     database: process.env.VITE_SKYSQL_DATABASE!,
     port: parseInt(process.env.VITE_SKYSQL_PORT || '3306', 10),
+    ssl: process.env.VITE_SKYSQL_SSL === 'true',
 }
 
 if (!skysqlConfig.host || !skysqlConfig.user || !skysqlConfig.password || !skysqlConfig.database) {
