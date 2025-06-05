@@ -24,7 +24,7 @@ class SkySQLClient {
             password: config.password,
             database: config.database,
             port: config.port || 3306,
-            ssl: config.ssl ?? true,
+            ssl: config.ssl ?? false,
             connectionLimit: config.connectionLimit || 5,
         });
     }
