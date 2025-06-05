@@ -34,6 +34,15 @@ class SkySQLClient {
     async close(): Promise<void> {
         await this.pool.end();
     }
+
+    async query(sql: string, params?: any[]): Promise<any> {
+        const conn = await this.getConnection();
+        try {
+            return await conn.query(sql, params);
+        } finally {
+            await conn.end();
+        }
+    }
 }
 
 const skysqlConfig: SkySQLConfig = {
