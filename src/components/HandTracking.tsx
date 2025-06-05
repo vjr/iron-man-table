@@ -191,7 +191,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             activity_count: user.item_count || 0,
             _table: referencedTable
           }));
-
+          
           return {
             type: 'user_activity',
             title: `${referencedTable.toUpperCase()} ACTIVITY`,
@@ -203,7 +203,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           };
         }
       }
-
+      
       // Strategy 2: Categories + Products (show category popularity)
       if (referencedTable.toLowerCase().includes('categor') || 
           referencingTable.toLowerCase().includes('product') ||
@@ -236,7 +236,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             item_count: category.item_count || 0,
             _table: referencedTable
           }));
-
+          
           return {
             type: 'category_distribution',
             title: 'CATEGORY DISTRIBUTION',
@@ -248,7 +248,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           };
         }
       }
-
+      
       // Strategy 3: Generic aggregation (count references)
       const response = await fetch('http://localhost:3001/query', {
         method: 'POST',
@@ -288,9 +288,9 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           }
           counts.get(key).count++;
         });
-
+        
         const processedData = Array.from(counts.values());
-
+        
         return {
           type: 'relationship_count',
           title: 'RELATIONSHIP ANALYSIS',
@@ -385,11 +385,11 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
         return;
       }
     }
-
+    
     setLoadingData(true);
     try {
       const allData: any[] = [];
-
+      
       for (const tableName of tableNames) {
         try {
           const response = await fetch('http://localhost:3001/query', {
@@ -410,7 +410,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
           console.error(`Failed to fetch ${tableName}:`, err);
         }
       }
-
+      
       setChartData({ tables: tableNames, data: allData });
       setLoadingData(false);
     } catch (err) {
@@ -427,7 +427,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             title: `${table} Title ${i + 1}`,
             _table: table
           };
-
+          
           // Add foreign key relationships for demo
           if (tableNames.length === 2 && tableIndex === 1) {
             // Second table references first table
@@ -1633,7 +1633,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
             // Draw text
             canvasCtx.fillStyle = table.isDragging ? '#FFD700' : '#00FFFF';
             canvasCtx.fillText(table.name.toUpperCase(), tableX, tableY + hexSize + 24);
-              });
+          });
 
           // Draw drop zone
           const dropZoneX = dropZone.x * canvasRef.current.width;
