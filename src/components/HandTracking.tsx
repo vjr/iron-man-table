@@ -1233,7 +1233,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
         ctx.fillText(group.label, 0, 0);
         ctx.restore();
       });
-      
+
       // Y-axis label
       ctx.fillStyle = '#00FFFF';
       ctx.font = '14px monospace';
@@ -1243,7 +1243,7 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
       ctx.rotate(-Math.PI / 2);
       ctx.fillText('COUNT', 0, 0);
       ctx.restore();
-      
+
       // X-axis label
       ctx.fillStyle = '#00FFFF';
       ctx.font = '14px monospace';
@@ -1253,6 +1253,30 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
                      xAxisType === 'id' ? 'ID' : 
                      xAxisField.toUpperCase();
       ctx.fillText(xLabel, width / 2, chartY + 60);
+
+      // X-axis line
+      ctx.strokeStyle = '#00FFFF';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.moveTo(startX - 20, chartY);
+      ctx.lineTo(startX + maxItems * (barWidth + barSpacing), chartY);
+      ctx.stroke();
+
+      // Exit hint background
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(width / 2 - 150, height - 50, 300, 30);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(width / 2 - 150, height - 50, 300, 30);
+
+      // Exit hint
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '14px monospace';
+      ctx.textAlign = 'center';
+      ctx.shadowBlur = 5;
+      ctx.shadowColor = '#FFFFFF';
+      ctx.fillText('SWIPE LEFT OR RIGHT TO RETURN', width / 2, height - 30);
     } else {
       // No data message
       ctx.fillStyle = '#FFD700';
@@ -1260,31 +1284,6 @@ const HandTracking: React.FC<HandTrackingProps> = ({ cameraId }) => {
       ctx.textAlign = 'center';
       ctx.fillText('NO DATA AVAILABLE', width / 2, height / 2);
     }
-    
-    // X-axis line
-    ctx.strokeStyle = '#00FFFF';
-    ctx.lineWidth = 2;
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.moveTo(startX - 20, chartY);
-    ctx.lineTo(startX + maxItems * (barWidth + barSpacing), chartY);
-    ctx.stroke();
-    
-    
-    // Exit hint background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(width / 2 - 150, height - 50, 300, 30);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(width / 2 - 150, height - 50, 300, 30);
-    
-    // Exit hint
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = '14px monospace';
-    ctx.textAlign = 'center';
-    ctx.shadowBlur = 5;
-    ctx.shadowColor = '#FFFFFF';
-    ctx.fillText('SWIPE LEFT OR RIGHT TO RETURN', width / 2, height - 30);
     
     // Restore context for animation transformations
     ctx.restore();
