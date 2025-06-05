@@ -57,4 +57,6 @@ if (!skysqlConfig.host || !skysqlConfig.user || !skysqlConfig.password || !skysq
     throw new Error('Missing SkySQL environment variables');
 }
 
-export const skysql = new SkySQLClient(skysqlConfig);
+const skysql = new SkySQLClient(skysqlConfig);
+
+export default skysql;
