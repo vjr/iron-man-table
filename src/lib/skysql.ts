@@ -41,7 +41,7 @@ const skysqlConfig: SkySQLConfig = {
     user: import.meta.env.VITE_SKYSQL_USERNAME,
     password: import.meta.env.VITE_SKYSQL_PASSWORD,
     database: import.meta.env.VITE_SKYSQL_DATABASE,
-    port: parseInt(import.meta.env.VITE_SKYSQL_PORT || 3306, 10),
+    port: parseInt(import.meta.env.VITE_SKYSQL_PORT || '3306', 10),
 }
 
 if (!skysqlConfig.host || !skysqlConfig.user || !skysqlConfig.password || !skysqlConfig.database) {
