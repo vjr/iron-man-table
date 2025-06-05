@@ -1,10 +1,12 @@
 import express from 'express';
+import cors from 'cors';
 import skysql from './skysql';
 
 const app = express();
 const port = 3001;
 
 app.use(express.json());
+app.use(cors());
 
 // POST /query { sql: string, params?: any[] }
 app.post('/query', async (req, res) => {
